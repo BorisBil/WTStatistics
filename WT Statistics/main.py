@@ -55,9 +55,10 @@ async def leave(ctx, *, guild_name):
 @commands.cooldown(rate=1, per=8)
 async def help_list(ctx):
   embedVar = discord.Embed(title = 'Commands')
-  embedVar.add_field(name = '$stats', value = '{name} {game mode}(optional)', inline = False)
-  embedVar.add_field(name = '$session', value = '{name}', inline = False)
-  embedVar.add_field(name = '$vehicle', value = '{name} {game mode} {vehicle}', inline = False)
+  embedVar.add_field(name = '$stats', value = '{username} {game mode (optional)}', inline = False)
+  embedVar.add_field(name = '$session', value = '{username} {game mode (optional)}', inline = False)
+  embedVar.add_field(name = '$vehicle', value = '{username} {game mode} {vehicle}', inline = False)
+  embedVar.add_field(name = 'Cooldown', value = 'Bot has an 8 second cooldown!', inline = True)
   await ctx.send(embed = embedVar)
 
 #Command to see either general or game mode specific statistics of a player
@@ -95,44 +96,85 @@ async def search_stats(ctx, search_name, game_mode = ''):
       embedVar.add_field(name = 'Favorite Vehicle \n' + vehicle, value = command_helper.search_vehicle_format(stats))
     await ctx.send(embed = embedVar)
 
-#Command to find the player's statistics in their last gaming session
+# Command to find the player's statistics in their last gaming session
 @bot.command(name = 'session')
 @commands.cooldown(rate=1, per=8)
-async def search_session(ctx, search_name, search_type = ''):
-  if search_type == '': #If search type is empty, just bring up general last session stats
-    result, gametype, squadron = search_class.search_session(search_name)
-    if result == []: #Error
+async def search_session(ctx, search_name: str = None, game_mode: str = None):
+  if game_mode == None: # If search type is empty, just bring up general last session stats
+    result, gametype, squadron, custom_url = search_class.search_session(search_name)
+    if result == []: # Error
       await ctx.send('No such person exists')
       return None
-    embedVar = discord.Embed(title = '{squadron_ls} {search_name_ls}'.format(search_name_ls = search_name, squadron_ls = squadron))
+    if search_name == None: # Error
+      await ctx.send('Error in input!')
+      return None
+    embedVar = discord.Embed(title = '{squadron_ls} {search_name_ls}'.format(search_name_ls = search_name, squadron_ls = squadron), url = '{url}'.format(url = custom_url))
     i = 0
-    for item in gametype: #For each gamemode returned by the command (there are 3 max)
+    for item in gametype: # For each gamemode returned by the command (there are 3 max)
       embedVar.add_field(name = item, value = command_helper.last_session_format(result[i:i + 7]))
       i = i + 7
     await ctx.send(embed = embedVar)
-
-#Caps sensitive command to search for vehicle specific statistics for a player
+  if game_mode != None:
+    user_msg = ctx.message
+    pages = []
+    i = 0
+    result, squadron, vehicles, custom_url = search_class.search_session_vehicles(search_name, game_mode)
+    if result == []:
+      await ctx.send('No updates!')
+    for item in vehicles: # Create a new page in the embed for every vehicle that comes up from the search
+      embedVar = discord.Embed(title = '{squadron_ls} {search_name_ls}'.format(search_name_ls = search_name, squadron_ls = squadron), url = '{url}'.format(url = custom_url))
+      embedVar.add_field(name = '{item_ls}'.format(item_ls = item), value = command_helper.search_session_vehicle_format(result[i:i + 7]))
+      i = i + 7
+      pages.append(embedVar)
+    index = 0
+    buttons = ["◀️", "🛑", "▶️"] # Buttons used for pagination + deleting the embed
+    message = await ctx.send(embed=pages[index])
+    for button in buttons: # Add the buttons as reactions
+      await message.add_reaction(button)
+    while True: # While the message is present, define message pagination, lock pagination to original message sender, and time out the reactions after they are not touched for 60 seconds
+      try:
+        reaction, user = await bot.wait_for('reaction_add', check = lambda reaction, user: user == ctx.author and reaction.message == message and reaction.emoji in buttons, timeout = 60.0)
+      except asyncio.TimeoutError:
+        embed = pages[index]
+        await message.clear_reactions()
+      else:
+        previous_page = index
+        if reaction.emoji == "◀️":
+          if index > 0:
+            index -= 1
+        elif reaction.emoji == "▶️":
+          if index < len(pages)-1:
+            index += 1
+        elif reaction.emoji == "🛑":
+          await message.delete()
+          await user_msg.delete()
+        for button in buttons:
+          await message.remove_reaction(button, ctx.author)
+        if index != previous_page:
+          await message.edit(embed = pages[index])
+    
+# Caps sensitive command to search for vehicle specific statistics for a player
 @bot.command(name = 'vehicle')
 @commands.cooldown(rate=1, per=8)
 async def search_vehicle(ctx, search_name: str = None, game_mode: str = None, *, search_vehicle: str = None):
-  if search_name == None: #Error
+  if search_name == None: # Error
     await ctx.send('Error in input!')
     return None
-  if game_mode == None: #Error
+  if game_mode == None: # Error
     await ctx.send('Error in input!')
     return None
-  if search_vehicle == None: #Error
+  if search_vehicle == None: # Error
     await ctx.send('Error in input!')
     return None
   user_msg = ctx.message
-  result, vehicles, squadron = search_class.search_vehicles(search_name, game_mode, search_vehicle)
-  if result == []: #Error
+  result, vehicles, squadron, custom_url = search_class.search_vehicles(search_name, game_mode, search_vehicle)
+  if result == []: # Error
       await ctx.send('Error!')
       return None
   pages = []
   i = 0
   for item in vehicles: #Create a new page in the embed for every vehicle that comes up from the search
-    embedVar = discord.Embed(title = '{squadron_ls} {search_name_ls}'.format(search_name_ls = search_name, squadron_ls = squadron))
+    embedVar = discord.Embed(title = '{squadron_ls} {search_name_ls}'.format(search_name_ls = search_name, squadron_ls = squadron), url = '{url}'.format(url = custom_url))
     embedVar.add_field(name = '{item_ls}'.format(item_ls = item), value = command_helper.search_vehicle_format(result[i:i + 11]))
     i = i + 11
     pages.append(embedVar)

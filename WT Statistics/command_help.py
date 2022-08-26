@@ -73,3 +73,15 @@ class command_help_functions:
                     .format(result0 = result[0], result1 = result[1], result2 = result[2], result3 = result[3], result4 = result[4], result5 = result[5], \
                     result6 = result[6], result7 = result[7], result8 = result[8], result9 = result[9], result10 = result[10])
         return output
+
+    def search_session_vehicle_format(self, result):
+        output = 'Battles: {result0}\n\
+                    Victories: {result1}\n\
+                    Defeats: {result2}\n\
+                    Deaths: {result3}\n\
+                    Air Kills: {result4}\n\
+                    Ground Kills: {result5} \n\
+                    Winrate: {result6}%'\
+                    .format(result0 = result[0], result1 = result[1], result2 = result[2], result3 = result[3], result4 = result[4], result5 = result[5], \
+                    result6 = result[6])
+        return output
